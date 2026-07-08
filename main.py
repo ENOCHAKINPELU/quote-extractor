@@ -15,7 +15,7 @@ import argparse
 import sys
 
 import config
-from llm.adapter import LLMAdapter
+from llm.adapter import LLMAdapter, LLMResponseParseError
 from pipeline.loader import InputFileError, InvalidQuoteFormatError, load_quotes
 from pipeline.logger import log_llm_call
 from pipeline.normalizer import normalize_quote
@@ -106,6 +106,11 @@ def process_quote(
     try:
         try:
             raw_response = adapter.extract(record["text"])
+        except LLMResponseParseError as exc:
+            reason = f"LLM response could not be parsed as JSON: {exc}"
+            print(f"  {reason}")
+            log_llm_call(quote_id, provider_name, config.MODEL, input_path, output_artifact, "parse_error")
+            return build_summary_entry(quote_id, True, [], [reason])
         except Exception as exc:
             reason = f"LLM extraction failed: {exc}"
             print(f"  {reason}")

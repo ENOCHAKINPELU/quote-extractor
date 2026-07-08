@@ -30,6 +30,24 @@ def test_currency_that_cannot_become_a_code_is_left_unchanged(value):
     assert normalize_currency(value) == value
 
 
+@pytest.mark.parametrize(
+    "symbol, expected_code",
+    [
+        ("€", "EUR"),
+        ("£", "GBP"),
+        ("¥", "JPY"),
+    ],
+)
+def test_unambiguous_currency_symbols_are_mapped_to_codes(symbol, expected_code):
+    """Symbols used by exactly one common currency are mapped deterministically."""
+    assert normalize_currency(symbol) == expected_code
+
+
+def test_ambiguous_dollar_symbol_is_left_unchanged():
+    """'$' is shared by many currencies, so it is never guessed - left for review instead."""
+    assert normalize_currency("$") == "$"
+
+
 def test_whitespace_is_trimmed():
     """Leading and trailing whitespace is removed."""
     assert normalize_whitespace(" Alpha Industrial Supplies ") == "Alpha Industrial Supplies"

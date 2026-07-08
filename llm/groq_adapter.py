@@ -11,7 +11,7 @@ import json
 from groq import Groq, GroqError
 
 import config
-from llm.adapter import LLMAdapter
+from llm.adapter import LLMAdapter, LLMAdapterError, LLMResponseParseError
 
 SYSTEM_PROMPT = """You are a precise data-extraction engine for supplier price quotes.
 
@@ -24,6 +24,10 @@ Extract structured data from the quote text provided by the user, following thes
   cannot be determined as an explicit calendar date, leave it null and note the uncertainty in
   "assumptions" instead of guessing.
 - Record any interpretation, uncertainty, or inference you had to make in the "assumptions" list.
+- If a currency symbol appears without an explicit ISO code (e.g. "$", "£"), infer the ISO code
+  only if the surrounding text makes it unambiguous (e.g. it also says "USD", "US dollars", or
+  names a country/region tied to a single currency). If it stays ambiguous (e.g. a bare "$" with
+  no other clue), set currency to null and note the ambiguity in "assumptions" instead of guessing.
 - Set "needs_review" to true whenever an important field (such as supplier name, items, or unit
   prices) is missing or ambiguous.
 - Respond with ONLY a single JSON object. Do not include prose, markdown, or code fences.
@@ -50,10 +54,6 @@ Return JSON matching exactly this shape:
 """
 
 
-class GroqAdapterError(RuntimeError):
-    """Raised when the Groq adapter fails to produce a usable extraction."""
-
-
 class GroqAdapter(LLMAdapter):
     """LLMAdapter implementation backed by the Groq chat completions API."""
 
@@ -74,14 +74,19 @@ class GroqAdapter(LLMAdapter):
             The raw, unvalidated dictionary parsed from the model's JSON response.
 
         Raises:
-            GroqAdapterError: If the request fails, the response is empty, or
-                the response body is not a valid JSON object.
+            LLMAdapterError: If the request itself fails or the response is empty.
+            LLMResponseParseError: If the response body is not a valid JSON object.
         """
         content = self._request_completion(text)
         return self._parse_json(content)
 
     def _request_completion(self, text: str) -> str:
-        """Send the extraction request to Groq and return the raw text content."""
+        """Send the extraction request to Groq and return the raw text content.
+
+        Raises:
+            LLMAdapterError: If the request fails, returns no choices, or
+                returns an empty response body.
+        """
         try:
             response = self._client.chat.completions.create(
                 model=self._model,
@@ -93,27 +98,32 @@ class GroqAdapter(LLMAdapter):
                 ],
             )
         except GroqError as exc:
-            raise GroqAdapterError(f"Groq API request failed: {exc}") from exc
+            raise LLMAdapterError(f"Groq API request failed: {exc}") from exc
 
         if not response.choices:
-            raise GroqAdapterError("Groq API returned no choices in the response.")
+            raise LLMAdapterError("Groq API returned no choices in the response.")
 
         content = response.choices[0].message.content
         if not content or not content.strip():
-            raise GroqAdapterError("Groq API returned an empty response.")
+            raise LLMAdapterError("Groq API returned an empty response.")
 
         return content
 
     @staticmethod
     def _parse_json(content: str) -> dict:
-        """Parse raw model output as a JSON object, raising on malformed content."""
+        """Parse raw model output as a JSON object.
+
+        Raises:
+            LLMResponseParseError: If the content is not valid JSON, or is
+                valid JSON but not a JSON object.
+        """
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
-            raise GroqAdapterError(f"Groq API returned malformed JSON: {exc}") from exc
+            raise LLMResponseParseError(f"Groq API returned malformed JSON: {exc}") from exc
 
         if not isinstance(parsed, dict):
-            raise GroqAdapterError(
+            raise LLMResponseParseError(
                 "Groq API returned valid JSON but not a JSON object "
                 f"(got {type(parsed).__name__})."
             )

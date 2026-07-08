@@ -203,8 +203,13 @@ deterministically and without guessing. Highlights:
 
 - Whitespace is trimmed from every string field; `supplier_name` also
   collapses repeated internal spaces.
-- `currency` is uppercased when it's a clean 3-letter code; anything else
-  is left as-is rather than invented.
+- `currency` is uppercased when it's a clean 3-letter code. Unambiguous
+  symbols (`€`, `£`, `¥`) are mapped to their ISO code. A bare `$` is
+  deliberately **not** mapped — it's shared by USD, CAD, AUD, and others,
+  so guessing one would mean inventing a currency; it's left as-is for the
+  review stage to flag instead. The LLM prompt itself is instructed to
+  resolve `$`-style symbols from context (e.g. an explicit "USD" or
+  "US dollars" mentioned nearby) wherever that's genuinely unambiguous.
 - Textual lead times (`"2 weeks"`, `"5 days"`) are converted to integer
   days; values that can't be safely converted become `None` rather than
   guessed.
@@ -221,6 +226,16 @@ deterministically and without guessing. Highlights:
 | `outputs/{quote_id}.json`            | The final, validated, normalized quote, including the `needs_review` decision.                  |
 | `review_summary.json`                | One entry per processed quote: `quote_id`, `needs_review`, `validation_errors`, `review_reasons`. |
 | `llm_calls.jsonl`                      | An append-only audit log, one JSON object per line, of every LLM call made (never overwritten).  |
+
+Each `llm_calls.jsonl` record's `status` is one of:
+
+| Status              | Meaning                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `success`            | Extraction, validation, and persistence all completed with no validation errors.              |
+| `validation_failed`  | Extraction succeeded, but the LLM's output failed one or more schema/business rules.          |
+| `parse_error`        | The LLM's response (or the data being written to disk) was not valid, usable JSON.            |
+| `api_error`           | The request to the LLM provider itself failed (network, auth, rate limit, empty response).    |
+| `unexpected_error`     | An unforeseen failure occurred outside the above categories (e.g. a disk write failure).       |
 
 ## Testing
 

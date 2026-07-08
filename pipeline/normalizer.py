@@ -14,6 +14,17 @@ WEEK_PATTERN = re.compile(r"^(\d+)\s*weeks?$")
 DAY_PATTERN = re.compile(r"^(\d+)\s*days?$")
 CURRENCY_CODE_LENGTH = 3
 
+# Only symbols used by a single, unambiguous currency in common practice are
+# mapped here. "$" is deliberately excluded: it is shared by USD, CAD, AUD,
+# SGD, HKD, and others, so mapping it without surrounding text context would
+# mean inventing a currency rather than normalizing one. Bare "$" is left
+# unchanged, which causes the review stage to flag it as ambiguous.
+CURRENCY_SYMBOL_MAP = {
+    "€": "EUR",
+    "£": "GBP",
+    "¥": "JPY",
+}
+
 
 def normalize_string(value: Any) -> Any:
     """Trim leading and trailing whitespace from a string value.
@@ -49,24 +60,32 @@ def normalize_whitespace(value: Any) -> Any:
 
 
 def normalize_currency(value: Any) -> Any:
-    """Trim and uppercase a currency code if it looks like a 3-letter code.
+    """Trim a currency value, map unambiguous symbols, and uppercase 3-letter codes.
 
-    Never invents a currency: if the trimmed value is not exactly three
-    alphabetic characters, it is returned trimmed but otherwise unchanged.
+    Never invents a currency: a symbol is only mapped to a code when that
+    symbol is unambiguous (see CURRENCY_SYMBOL_MAP). Anything else that
+    isn't exactly three alphabetic characters is returned trimmed but
+    otherwise unchanged, leaving genuinely ambiguous values (e.g. a bare
+    "$") for the review stage to flag.
 
     Args:
         value: The value to normalize.
 
     Returns:
-        The uppercased 3-letter code, the trimmed original string if it does
-        not fit that shape, or the original value if it is not a string.
+        The mapped or uppercased code, the trimmed original string if it
+        doesn't fit either case, or the original value if it is not a string.
     """
     if not isinstance(value, str):
         return value
 
     trimmed = value.strip()
+
+    if trimmed in CURRENCY_SYMBOL_MAP:
+        return CURRENCY_SYMBOL_MAP[trimmed]
+
     if len(trimmed) == CURRENCY_CODE_LENGTH and trimmed.isalpha():
         return trimmed.upper()
+
     return trimmed
 
 
