@@ -1,0 +1,16 @@
+{
+  "documents": [
+    {
+      "id": 1,
+      "text": "\"The only way to do great work is to love what you do,\" said Steve Jobs during a commencement address. He added, \"Stay hungry, stay foolish.\""
+    },
+    {
+      "id": 2,
+      "text": "In an interview, Marie Curie remarked, \"Nothing in life is to be feared, it is only to be understood.\" She continued by explaining the importance of curiosity in science."
+    },
+    {
+      "id": 3,
+      "text": "During the press conference, the CEO stated: \"Our quarterly growth exceeded expectations, and we remain committed to innovation.\" No further quotes were given on financial details."
+    }
+  ]
+}
